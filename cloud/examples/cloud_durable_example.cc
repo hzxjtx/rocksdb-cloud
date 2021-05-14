@@ -47,7 +47,8 @@ int main() {
   // Append the user name to the bucket name in an attempt to make it
   // globally unique. S3 bucket-names need to be globally unique.
   // If you want to rerun this example, then unique user-name suffix here.
-  char* user = getenv("USER");
+  // char* user = getenv("USER");
+  char* user = "huzx";
   kBucketSuffix.append(user);
 
   fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
@@ -55,12 +56,17 @@ int main() {
   const std::string bucketPrefix = "rockset.";
   cloud_env_options.src_bucket.SetBucketName(kBucketSuffix, bucketPrefix);
   cloud_env_options.dest_bucket.SetBucketName(kBucketSuffix, bucketPrefix);
+  // todo huzx   
+  cloud_env_options.keep_local_log_files = false;
+  cloud_env_options.log_type = LogType::kLogKafka;
+  cloud_env_options.kafka_log_options.client_config_params["metadata.broker.list"] = "172.20.3.83:9092";
+
 
   fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // create a bucket name for debugging purposes
   const std::string bucketName = bucketPrefix + kBucketSuffix;
+  printf("Huzx: now the bucketName is: %s\n", bucketName.c_str());
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // Create a new AWS cloud env Status
   CloudEnv* cenv;
   Status s = CloudEnv::NewAwsEnv(Env::Default(), kBucketSuffix, kDBPath,
@@ -74,22 +80,18 @@ int main() {
   }
   cloud_env.reset(cenv);
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // Create options and use the AWS env that we created earlier
   Options options;
   options.env = cloud_env.get();
   options.create_if_missing = true;
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // No persistent read-cache
   std::string persistent_cache = "";
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // options for each write
   WriteOptions wopt;
   wopt.disableWAL = disableWAL;
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // open DB
   DBCloud* db;
   s = DBCloud::Open(options, kDBPath, persistent_cache, 0, &db);
@@ -99,7 +101,6 @@ int main() {
     return -1;
   }
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // Put key-value
   s = db->Put(wopt, "key1", "value");
   assert(s.ok());
@@ -109,7 +110,6 @@ int main() {
   assert(s.ok());
   assert(value == "value");
 
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   // atomically apply a set of updates
   {
     WriteBatch batch;
