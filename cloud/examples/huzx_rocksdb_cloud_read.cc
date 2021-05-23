@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
    * 1: KeyLen
    */
   int dftKeyLen = 3;
-  if (argc >= 2) {
+  if (argc > 2) {
     dftKeyLen = atoi(argv[1]);
   }
   printf("Current input key length is:%d\n", dftKeyLen);
@@ -116,47 +116,6 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  // Put key-value
-  s = db->Put(wopt, "key1", "value");
-  assert(s.ok());
-  std::string value;
-  // get value
-  s = db->Get(ReadOptions(), "key1", &value);
-  assert(s.ok());
-  assert(value == "value");
-
-  // atomically apply a set of updates
-  /*
-  {
-    WriteBatch batch;
-    batch.Delete("key1");
-    batch.Put("key2", value);
-    s = db->Write(wopt, &batch);
-  }
-  */
-
-  char key[1024];
-  char rocksV[1024];
-  long totalWCnt = 0;
-  for (long i = 0; i < 100; i++) {
-    WriteBatch batch;
-      for (long j = 0; j < 1000; j++) {
-         memset(key, 0, sizeof(key));
-         memset(rocksV, 0, sizeof(rocksV));
-          if (dftKeyLen <= 10) {
-              sprintf(key, "%010ld%010ld", i, j);
-          } else {
-              sprintf(key, "%020ld%010ld", i, j);
-          }
-         generateRandomBucket(rocksV);
-         batch.Put(key, rocksV);
-         totalWCnt++;
-         printf("Write Key:%s, Value:%s\n", key, rocksV);
-      } 
-    db->Write(wopt, &batch);
-    db->Flush(FlushOptions());
-  }
-
   // print all values in the database
   printf("----------------Start Scan the database ----------\n");
   long totalRCnt = 0;
@@ -175,8 +134,8 @@ int main(int argc, char** argv) {
   }
   delete db;
 
-  fprintf(stdout, "Successfully used db at path %s in bucket %s. totalWCnt:%ld, totalRCnt:%ld\n",
-          kDBPath.c_str(), bucketName.c_str(), totalWCnt, totalRCnt);
+  fprintf(stdout, "Successfully used db at path %s in bucket %s.totalRCnt:%ld\n",
+          kDBPath.c_str(), bucketName.c_str(), totalRCnt);
   return 0;
 }
 

@@ -17,14 +17,14 @@ void generateRandomBucket(char buf[]) {
 using namespace ROCKSDB_NAMESPACE;
 
 // This is the local directory where the db is stored.
-std::string kDBPath = "/app/rockset/rocksdb_cloud_durable";
+std::string kDBPath = "/app/rockset/rocksdb_cloud_cf";
 
 // This is the name of the cloud storage bucket where the db
 // is made durable. if you are using AWS, you have to manually
 // ensure that this bucket name is unique to you and does not
 // conflict with any other S3 users who might have already created
 // this bucket name.
-std::string kBucketSuffix = "cloud.durable.example.";
+std::string kBucketSuffix = "cloud.durable.cf.";
 std::string kRegion = "us-west-2";
 
 static const bool flushAtEnd = true;
@@ -38,9 +38,11 @@ int main(int argc, char** argv) {
    * 1: KeyLen
    */
   int dftKeyLen = 3;
+/*
   if (argc >= 2) {
     dftKeyLen = atoi(argv[1]);
   }
+*/
   printf("Current input key length is:%d\n", dftKeyLen);
 
   // cloud environment config options here
@@ -65,7 +67,7 @@ int main(int argc, char** argv) {
   // globally unique. S3 bucket-names need to be globally unique.
   // If you want to rerun this example, then unique user-name suffix here.
   // char* user = getenv("USER");
-  char* user = "xxx004";
+  char* user = "xxx002";
   kBucketSuffix.append(user);
 
   // "rockset." is the default bucket prefix
@@ -99,6 +101,7 @@ int main(int argc, char** argv) {
   Options options;
   options.env = cloud_env.get();
   options.create_if_missing = true;
+  options.create_missing_column_families = true;
 
   // No persistent read-cache
   std::string persistent_cache = "";
@@ -107,21 +110,33 @@ int main(int argc, char** argv) {
   WriteOptions wopt;
   wopt.disableWAL = disableWAL;
 
-  // open DB
+  // open DB with two column families
+  std::vector<ColumnFamilyDescriptor> column_families;
+  // have to open default column family
+  column_families.push_back(ColumnFamilyDescriptor(kDefaultColumnFamilyName, ColumnFamilyOptions()));
+  // open the new one, too
+  column_families.push_back(ColumnFamilyDescriptor("huzxcol", ColumnFamilyOptions()));
+
+  std::vector<ColumnFamilyHandle*> handles;
   DBCloud* db;
-  s = DBCloud::Open(options, kDBPath, persistent_cache, 0, &db);
+  s = DBCloud::Open(options, kDBPath, column_families, persistent_cache, 0, &handles, &db, false);
   if (!s.ok()) {
-    fprintf(stderr, "Unable to open db at path %s with bucket %s. %s\n",
-            kDBPath.c_str(), bucketName.c_str(), s.ToString().c_str());
-    return -1;
+   fprintf(stderr, "Unable to open db at path %s with bucket %s. %s\n",
+           kDBPath.c_str(), bucketName.c_str(), s.ToString().c_str());
+   return -1;
   }
 
+  // open DB
+  // s = DBCloud::Open(options, kDBPath, persistent_cache, 0, &db);
+
   // Put key-value
-  s = db->Put(wopt, "key1", "value");
+  printf("Start Write Key: %s\n", "key1");
+  s = db->Put(wopt, handles[1], "key1", "value");
   assert(s.ok());
   std::string value;
   // get value
-  s = db->Get(ReadOptions(), "key1", &value);
+  printf("Start Get Key: %s\n", "key1");
+  s = db->Get(ReadOptions(), handles[1], "key1", &value);
   assert(s.ok());
   assert(value == "value");
 
@@ -135,9 +150,9 @@ int main(int argc, char** argv) {
   }
   */
 
+  long totalWCnt = 0;
   char key[1024];
   char rocksV[1024];
-  long totalWCnt = 0;
   for (long i = 0; i < 100; i++) {
     WriteBatch batch;
       for (long j = 0; j < 1000; j++) {
@@ -149,7 +164,7 @@ int main(int argc, char** argv) {
               sprintf(key, "%020ld%010ld", i, j);
           }
          generateRandomBucket(rocksV);
-         batch.Put(key, rocksV);
+         batch.Put(handles[1], key, rocksV);
          totalWCnt++;
          printf("Write Key:%s, Value:%s\n", key, rocksV);
       } 
@@ -161,7 +176,7 @@ int main(int argc, char** argv) {
   printf("----------------Start Scan the database ----------\n");
   long totalRCnt = 0;
   ROCKSDB_NAMESPACE::Iterator* it =
-      db->NewIterator(ROCKSDB_NAMESPACE::ReadOptions());
+      db->NewIterator(ROCKSDB_NAMESPACE::ReadOptions(), handles[1]);
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
     totalRCnt++;
     std::cout << it->key().ToString() << ": " << it->value().ToString()
@@ -173,6 +188,12 @@ int main(int argc, char** argv) {
   if (flushAtEnd) {
     db->Flush(FlushOptions());
   }
+
+  for (auto handle : handles) {
+    s = db->DestroyColumnFamilyHandle(handle);
+    assert(s.ok());
+  }
+
   delete db;
 
   fprintf(stdout, "Successfully used db at path %s in bucket %s. totalWCnt:%ld, totalRCnt:%ld\n",

@@ -10,9 +10,16 @@ endif
 
 .PHONY: clean librocksdb
 
-all: huzx_rocksdb_cloud cloud_durable_example clone_example cloud_dump
+all: huzx_rocksdb_cloud huzx_rocksdb_cloud_read huzx_example_with_cf
+#all: huzx_rocksdb_cloud cloud_durable_example clone_example cloud_dump
 
 huzx_rocksdb_cloud: librocksdb huzx_rocksdb_cloud.cc
+	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -luuid -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
+
+huzx_example_with_cf: librocksdb huzx_example_with_cf.cc
+	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -luuid -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
+
+huzx_rocksdb_cloud_read: librocksdb huzx_rocksdb_cloud_read.cc
 	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -luuid -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
 
 cloud_durable_example: librocksdb cloud_durable_example.cc
