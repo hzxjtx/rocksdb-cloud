@@ -2,10 +2,13 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include <uuid/uuid.h>
 
 #include "rocksdb/cloud/db_cloud.h"
 #include "rocksdb/options.h"
+
+using namespace ROCKSDB_NAMESPACE;
 
 void generateRandomBucket(char buf[]) {
     uuid_t uu;
@@ -14,17 +17,26 @@ void generateRandomBucket(char buf[]) {
     uuid_unparse(uu,buf);
 }
 
-using namespace ROCKSDB_NAMESPACE;
+int case_insensitive_match(std::string s1, std::string s2) {
+   //convert s1 and s2 into lower case strings
+   transform(s1.begin(), s1.end(), s1.begin(), ::tolower);
+   transform(s2.begin(), s2.end(), s2.begin(), ::tolower);
+   if(s1.compare(s2) == 0)
+      return 0; //The strings are same
+   return 1; //not matched
+}
+
 
 // This is the local directory where the db is stored.
-std::string kDBPath = "/app/rockset/rocksdb_cloud_complex000";
+std::string kDBPath = "/app/rockset/";
 
 // This is the name of the cloud storage bucket where the db
 // is made durable. if you are using AWS, you have to manually
 // ensure that this bucket name is unique to you and does not
 // conflict with any other S3 users who might have already created
 // this bucket name.
-std::string kBucketSuffix = "cloud.durable.complex000.";
+// std::string kBucketSuffix = "cloud.durable.complex000.";
+std::string kBucketSuffix = "com.zetyun.rt.";
 std::string kRegion = "us-west-2";
 
 static const bool flushAtEnd = true;
@@ -34,16 +46,21 @@ int main(int argc, char** argv) {
 
   /**
    * argv:
-   * 0: Execute file name
-   * 1: KeyLen
+   * 1: UserName of Subffix
+   * 2: ColumnFamilyDescriptor
    */
-  int dftKeyLen = 3;
-/*
-  if (argc >= 2) {
-    dftKeyLen = atoi(argv[1]);
+  std::string userName = "";
+  std::string columnF = "";
+  if (argc >= 3) {
+      std::string lUserName(argv[1]);
+      std::string lColumnF(argv[2]);
+      userName = lUserName;
+      columnF = lColumnF;
+  } else {
+      userName = "huzx";
+      columnF = kDefaultColumnFamilyName;
   }
-*/
-  printf("Current input key length is:%d\n", dftKeyLen);
+  printf("Input column family is:[%s]\n",  columnF.c_str());
 
   // cloud environment config options here
   CloudEnvOptions cloud_env_options;
@@ -63,15 +80,10 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  // Append the user name to the bucket name in an attempt to make it
-  // globally unique. S3 bucket-names need to be globally unique.
-  // If you want to rerun this example, then unique user-name suffix here.
-  // char* user = getenv("USER");
-  char* user = "xxx001";
-  kBucketSuffix.append(user);
-
   // "rockset." is the default bucket prefix
   const std::string bucketPrefix = "rockset.";
+  kBucketSuffix +=  userName;
+  kDBPath += userName;
   cloud_env_options.src_bucket.SetBucketName(kBucketSuffix, bucketPrefix);
   cloud_env_options.dest_bucket.SetBucketName(kBucketSuffix, bucketPrefix);
   // todo huzx   
@@ -89,7 +101,6 @@ int main(int argc, char** argv) {
   Status s = CloudEnv::NewAwsEnv(Env::Default(), kBucketSuffix, kDBPath,
                                  kRegion, kBucketSuffix, kDBPath, kRegion,
                                  cloud_env_options, nullptr, &cenv);
-  fprintf(stdout, "%s at line %d\n", __FUNCTION__, __LINE__);
   if (!s.ok()) {
     fprintf(stderr, "Unable to create cloud env in bucket %s. %s\n",
             bucketName.c_str(), s.ToString().c_str());
@@ -110,97 +121,54 @@ int main(int argc, char** argv) {
   WriteOptions wopt;
   wopt.disableWAL = disableWAL;
 
-  // open DB with two column families
-  std::vector<ColumnFamilyDescriptor> column_families;
-  // have to open default column family
-  column_families.push_back(ColumnFamilyDescriptor(kDefaultColumnFamilyName, ColumnFamilyOptions()));
-  // open the new one, too
-  column_families.push_back(ColumnFamilyDescriptor("huzxcol", ColumnFamilyOptions()));
-
-  std::vector<ColumnFamilyHandle*> handles;
   DBCloud* db;
+  std::vector<ColumnFamilyHandle*> handles;
+  std::vector<ColumnFamilyDescriptor> column_families;
+  bool isDftColumnF = (case_insensitive_match(columnF, kDefaultColumnFamilyName)) == 0;
+  printf("Is Same ColumnF: input:%s, default:%s\n", columnF.c_str(), kDefaultColumnFamilyName.c_str());
+  if (!isDftColumnF) {
+      // open DB with two column families
+      // have to open default column family
+      column_families.push_back(ColumnFamilyDescriptor(kDefaultColumnFamilyName, ColumnFamilyOptions()));
+      // open the new one, too
+      column_families.push_back(ColumnFamilyDescriptor(columnF, ColumnFamilyOptions()));
+      s = DBCloud::Open(options, kDBPath, column_families, persistent_cache, 0, &handles, &db, false);
+  } else {
+      s = DBCloud::Open(options, kDBPath, persistent_cache, 0, &db);
+  }
   s = DBCloud::Open(options, kDBPath, column_families, persistent_cache, 0, &handles, &db, false);
   if (!s.ok()) {
    fprintf(stderr, "Unable to open db at path %s with bucket %s. %s\n",
            kDBPath.c_str(), bucketName.c_str(), s.ToString().c_str());
    return -1;
   }
-
-  // open DB
-  // s = DBCloud::Open(options, kDBPath, persistent_cache, 0, &db);
-
-  // Put key-value
-  printf("Start Write Key: %s\n", "key1");
-  // s = db->Put(wopt, handles[1], "key1", "value");
-  // assert(s.ok());
-  std::string value;
-  // get value
-  printf("Start Get Key: %s\n", "key1");
-  s = db->Get(ReadOptions(), handles[1], "key1", &value);
-  printf("Start Value: %s\n", s.getState());
-  // assert(s.ok());
-  // assert(value == "value");
-
-  // atomically apply a set of updates
-  /*
-  {
-    WriteBatch batch;
-    batch.Delete("key1");
-    batch.Put("key2", value);
-    s = db->Write(wopt, &batch);
-  }
-  */
-
-  long totalWCnt = 0;
-  char key[1024];
-  char rocksV[1024];
-  /*
-  for (long i = 0; i < 100; i++) {
-    WriteBatch batch;
-      for (long j = 0; j < 1000; j++) {
-         memset(key, 0, sizeof(key));
-         memset(rocksV, 0, sizeof(rocksV));
-          if (dftKeyLen <= 10) {
-              sprintf(key, "%020ld%010ld", i, j);
-          } else {
-              sprintf(key, "%030ld%010ld", i, j);
-          }
-         generateRandomBucket(rocksV);
-         batch.Put(handles[1], key, rocksV);
-         totalWCnt++;
-         printf("Write Key:%s, Value:%s\n", key, rocksV);
-      } 
-    db->Write(wopt, &batch);
-    db->Flush(FlushOptions());
-  }
-*/
+  
 
   // print all values in the database
   printf("----------------Start Scan the database ----------\n");
   long totalRCnt = 0;
-  ROCKSDB_NAMESPACE::Iterator* it =
-      db->NewIterator(ROCKSDB_NAMESPACE::ReadOptions(), handles[1]);
+  ROCKSDB_NAMESPACE::Iterator* it = NULL;
+  if (isDftColumnF) {
+    it = db->NewIterator(ROCKSDB_NAMESPACE::ReadOptions());
+  } else {
+    it = db->NewIterator(ROCKSDB_NAMESPACE::ReadOptions(), handles[1]);
+  }
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
     totalRCnt++;
-    std::cout << it->key().ToString() << ": " << it->value().ToString()
-              << std::endl;
+    std::cout << it->key().ToString() << ": " << it->value().ToString() << std::endl;
   }
   delete it;
 
-  // Flush all data from main db to sst files. Release db.
-  // if (flushAtEnd) {
-  //   db->Flush(FlushOptions());
-  // }
-
-  for (auto handle : handles) {
-    s = db->DestroyColumnFamilyHandle(handle);
-    assert(s.ok());
+  if (!isDftColumnF) {
+      for (auto handle : handles) {
+          s = db->DestroyColumnFamilyHandle(handle);
+          assert(s.ok());
+      }
   }
-
   delete db;
 
-  fprintf(stdout, "Successfully used db at path %s in bucket %s. totalWCnt:%ld, totalRCnt:%ld\n",
-          kDBPath.c_str(), bucketName.c_str(), totalWCnt, totalRCnt);
+  fprintf(stdout, "Successfully used db at path %s in bucket %s. totalRCnt:%ld\n",
+          kDBPath.c_str(), bucketName.c_str(), totalRCnt);
   return 0;
 }
 
