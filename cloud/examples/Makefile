@@ -10,7 +10,7 @@ endif
 
 .PHONY: clean librocksdb
 
-all: huzx_write_by_cf huzx_read_by_cf
+all: huzx_write_by_cf huzx_read_by_cf huzx_rocksdb_cloud
 #all: huzx_rocksdb_cloud cloud_durable_example clone_example cloud_dump
 
 huzx_write_by_cf: librocksdb huzx_write_by_cf.cc
@@ -18,6 +18,9 @@ huzx_write_by_cf: librocksdb huzx_write_by_cf.cc
 
 huzx_read_by_cf: librocksdb huzx_read_by_cf.cc
 	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -luuid -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
+
+huzx_rocksdb_cloud: librocksdb huzx_rocksdb_cloud.cc
+	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
 
 cloud_durable_example: librocksdb cloud_durable_example.cc
 	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
@@ -29,7 +32,7 @@ cloud_dump: librocksdb cloud_dump.cc
 	$(CXX) $(CXXFLAGS) $@.cc -o $@ ../../librocksdb.a -I../../include $(OPT) -std=c++11 $(PLATFORM_LDFLAGS) $(PLATFORM_CXXFLAGS) $(EXEC_LDFLAGS)
 
 clean:
-	rm -rf ./cloud_durable_example  ./clone_example ./cloud_dump
+	rm -rf ./cloud_durable_example  ./clone_example ./cloud_dump ./huzx_read_by_cf ./huzx_write_by_cf
 
 librocksdb:
 	cd ../.. && $(MAKE) static_lib
